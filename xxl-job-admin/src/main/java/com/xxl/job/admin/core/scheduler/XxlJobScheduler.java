@@ -18,17 +18,23 @@ import java.util.concurrent.ConcurrentMap;
 
 /**
  * @author xuxueli 2018-10-28 00:18:17
+ *
+ * xxl job调度器
  */
 
 public class XxlJobScheduler  {
     private static final Logger logger = LoggerFactory.getLogger(XxlJobScheduler.class);
 
 
+    /**
+     * 调度器初始化过程
+     * @throws Exception
+     */
     public void init() throws Exception {
-        // init i18n
+        // init i18n 国际化
         initI18n();
 
-        // admin registry monitor run
+        // admin registry monitor run - 注册节点信息的监听器线程
         JobRegistryMonitorHelper.getInstance().start();
 
         // admin monitor run
@@ -90,6 +96,7 @@ public class XxlJobScheduler  {
         }
 
         // set-cache
+        //构建代理对象。nettyclient
         XxlRpcReferenceBean referenceBean = new XxlRpcReferenceBean();
         referenceBean.setClient(NettyHttpClient.class);
         referenceBean.setSerializer(HessianSerializer.class);
@@ -102,7 +109,7 @@ public class XxlJobScheduler  {
         referenceBean.setAccessToken(XxlJobAdminConfig.getAdminConfig().getAccessToken());
         referenceBean.setInvokeCallback(null);
         referenceBean.setInvokerFactory(null);
-
+        //这里是核心，其实就是netty的封装
         executorBiz = (ExecutorBiz) referenceBean.getObject();
 
         executorBizRepository.put(address, executorBiz);

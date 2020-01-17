@@ -23,6 +23,11 @@ import java.util.concurrent.TimeUnit;
  * job monitor instance
  *
  * @author xuxueli 2015-9-1 18:05:56
+ *
+ *
+ * 监控执行失败的任务
+ *
+ * 目的是为了调用客户端
  */
 public class JobFailMonitorHelper {
 	private static Logger logger = LoggerFactory.getLogger(JobFailMonitorHelper.class);
@@ -87,7 +92,7 @@ public class JobFailMonitorHelper {
 
 					} catch (Exception e) {
 						if (!toStop) {
-							logger.error(">>>>>>>>>>> xxl-job, job fail monitor thread error:{}", e);
+							logger.error(">>>>>>>>>>> xxl-job, job fail monitor thread error:", e);
 						}
 					}
 

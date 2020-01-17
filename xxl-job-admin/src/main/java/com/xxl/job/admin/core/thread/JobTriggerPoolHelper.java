@@ -13,6 +13,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  * job trigger thread pool helper
  *
  * @author xuxueli 2018-07-03 21:08:07
+ *
+ *
+ * 触发器线程池，用于接收触发的任务，然后异步的推送给客户端进行执行
+ *
+ * 分为两个线程池 {@link #fastTriggerPool} 和 {@link #slowTriggerPool}
+ *
+ * 当一个任务失败十次以后就会进入到这
+ *
+ *
  */
 public class JobTriggerPoolHelper {
     private static Logger logger = LoggerFactory.getLogger(JobTriggerPoolHelper.class);
@@ -74,6 +83,8 @@ public class JobTriggerPoolHelper {
         // choose thread pool
         ThreadPoolExecutor triggerPool_ = fastTriggerPool;
         AtomicInteger jobTimeoutCount = jobTimeoutCountMap.get(jobId);
+
+        //大于10次进入慢的池子
         if (jobTimeoutCount!=null && jobTimeoutCount.get() > 10) {      // job-timeout 10 times in 1 min
             triggerPool_ = slowTriggerPool;
         }
@@ -87,6 +98,7 @@ public class JobTriggerPoolHelper {
 
                 try {
                     // do trigger
+                    //触发任务
                     XxlJobTrigger.trigger(jobId, triggerType, failRetryCount, executorShardingParam, executorParam);
                 } catch (Exception e) {
                     logger.error(e.getMessage(), e);

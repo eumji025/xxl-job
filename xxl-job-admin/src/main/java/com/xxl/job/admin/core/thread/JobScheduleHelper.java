@@ -17,6 +17,12 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * @author xuxueli 2019-05-21
+ *
+ * 真正任务调度的线程
+ *
+ * 就是从数据库取任务，然后构建任务调用客户端
+ *
+ * 客户端异步处理
  */
 public class JobScheduleHelper {
     private static Logger logger = LoggerFactory.getLogger(JobScheduleHelper.class);
@@ -42,6 +48,7 @@ public class JobScheduleHelper {
             public void run() {
 
                 try {
+                    //4-5s执行一次
                     TimeUnit.MILLISECONDS.sleep(5000 - System.currentTimeMillis()%1000 );
                 } catch (InterruptedException e) {
                     if (!scheduleThreadToStop) {
@@ -51,6 +58,7 @@ public class JobScheduleHelper {
                 logger.info(">>>>>>>>> init xxl-job admin scheduler success.");
 
                 // pre-read count: treadpool-size * trigger-qps (each trigger cost 50ms, qps = 1000/50 = 20)
+                //获取准备读取的数量
                 int preReadCount = (XxlJobAdminConfig.getAdminConfig().getTriggerPoolFastMax() + XxlJobAdminConfig.getAdminConfig().getTriggerPoolSlowMax()) * 20;
 
                 while (!scheduleThreadToStop) {
@@ -68,7 +76,7 @@ public class JobScheduleHelper {
                         conn = XxlJobAdminConfig.getAdminConfig().getDataSource().getConnection();
                         connAutoCommit = conn.getAutoCommit();
                         conn.setAutoCommit(false);
-
+                        //这里还通过jdbc构造了一个锁的任务，其实也可以直接使用mybatis
                         preparedStatement = conn.prepareStatement(  "select * from xxl_job_lock where lock_name = 'schedule_lock' for update" );
                         preparedStatement.execute();
 
@@ -76,11 +84,14 @@ public class JobScheduleHelper {
 
                         // 1、pre read
                         long nowTime = System.currentTimeMillis();
+                        //获取注册的job信息，这里要注意这个地方非常重要
                         List<XxlJobInfo> scheduleList = XxlJobAdminConfig.getAdminConfig().getXxlJobInfoDao().scheduleJobQuery(nowTime + PRE_READ_MS, preReadCount);
                         if (scheduleList!=null && scheduleList.size()>0) {
                             // 2、push time-ring
                             for (XxlJobInfo jobInfo: scheduleList) {
 
+
+                                //获取任务的时间，如果当前的时间大于下次出发的时间和与准备的时间之和，则直接跳过执行，构建下一次时间
                                 // time-ring jump
                                 if (nowTime > jobInfo.getTriggerNextTime() + PRE_READ_MS) {
                                     // 2.1、trigger-expire > 5s：pass && make next-trigger-time
@@ -89,6 +100,8 @@ public class JobScheduleHelper {
                                     // fresh next
                                     refreshNextValidTime(jobInfo, new Date());
 
+
+                                 //如果时间在预读的5s内，则进行出发，更新下一次执行的时间
                                 } else if (nowTime > jobInfo.getTriggerNextTime()) {
                                     // 2.2、trigger-expire < 5s：direct-trigger && make next-trigger-time
 
@@ -100,6 +113,7 @@ public class JobScheduleHelper {
                                     refreshNextValidTime(jobInfo, new Date());
 
                                     // next-trigger-time in 5s, pre-read again
+                                    //否则将其加入到ring的map中，分批进行执行
                                     if (jobInfo.getTriggerStatus()==1 && nowTime + PRE_READ_MS > jobInfo.getTriggerNextTime()) {
 
                                         // 1、make ring second
@@ -113,7 +127,7 @@ public class JobScheduleHelper {
 
                                     }
 
-                                } else {
+                                } else {//同上
                                     // 2.3、trigger-pre-read：time-ring trigger && make next-trigger-time
 
                                     // 1、make ring second
@@ -129,6 +143,7 @@ public class JobScheduleHelper {
 
                             }
 
+                            //更新调度信息
                             // 3、update trigger info
                             for (XxlJobInfo jobInfo: scheduleList) {
                                 XxlJobAdminConfig.getAdminConfig().getXxlJobInfoDao().scheduleUpdate(jobInfo);
@@ -208,13 +223,14 @@ public class JobScheduleHelper {
         scheduleThread.start();
 
 
-        // ring thread
+        // ring thread ring是指从列表中火球执行的任务进行执行
         ringThread = new Thread(new Runnable() {
             @Override
             public void run() {
 
                 // align second
                 try {
+                    //休息0-1s
                     TimeUnit.MILLISECONDS.sleep(1000 - System.currentTimeMillis()%1000 );
                 } catch (InterruptedException e) {
                     if (!ringThreadToStop) {
@@ -228,6 +244,7 @@ public class JobScheduleHelper {
                         // second data
                         List<Integer> ringItemData = new ArrayList<>();
                         int nowSecond = Calendar.getInstance().get(Calendar.SECOND);   // 避免处理耗时太长，跨过刻度，向前校验一个刻度；
+                        //移除1-60之间的一个列表
                         for (int i = 0; i < 2; i++) {
                             List<Integer> tmpData = ringData.remove( (nowSecond+60-i)%60 );
                             if (tmpData != null) {
@@ -239,6 +256,7 @@ public class JobScheduleHelper {
                         logger.debug(">>>>>>>>>>> xxl-job, time-ring beat : " + nowSecond + " = " + Arrays.asList(ringItemData) );
                         if (ringItemData.size() > 0) {
                             // do trigger
+                            //便利所有的job信息进行出发
                             for (int jobId: ringItemData) {
                                 // do trigger
                                 JobTriggerPoolHelper.trigger(jobId, TriggerTypeEnum.CRON, -1, null, null);

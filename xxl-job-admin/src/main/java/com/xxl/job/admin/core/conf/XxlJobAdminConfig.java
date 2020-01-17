@@ -15,6 +15,8 @@ import javax.sql.DataSource;
  * xxl-job config
  *
  * @author xuxueli 2017-04-28
+ *
+ * admin的起点 通过实现{@link InitializingBean} 来做到spring 容器启动后进行xxl-job的启动
  */
 
 @Component
