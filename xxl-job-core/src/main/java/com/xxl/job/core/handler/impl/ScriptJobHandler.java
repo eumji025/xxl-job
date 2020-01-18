@@ -12,6 +12,12 @@ import java.io.File;
 
 /**
  * Created by xuxueli on 17/4/27.
+ *
+ * 用来处理脚本类型任务的handler
+ *
+ *
+ * 最终会调用{@link Runtime#getRuntime()#exec()}方法进行脚本的调用
+ * 所以说对于脚本类型的任务，还是需要操作系统的支持
  */
 public class ScriptJobHandler extends IJobHandler {
 
@@ -56,6 +62,7 @@ public class ScriptJobHandler extends IJobHandler {
         String cmd = glueType.getCmd();
 
         // make script file
+        //构建脚本文件名，脚本都会被创建文件
         String scriptFileName = XxlJobFileAppender.getGlueSrcPath()
                 .concat(File.separator)
                 .concat(String.valueOf(jobId))
@@ -79,6 +86,7 @@ public class ScriptJobHandler extends IJobHandler {
 
         // invoke
         XxlJobLogger.log("----------- script file:"+ scriptFileName +" -----------");
+        //执行
         int exitValue = ScriptUtil.execToFile(cmd, scriptFileName, logFileName, scriptParams);
 
         if (exitValue == 0) {

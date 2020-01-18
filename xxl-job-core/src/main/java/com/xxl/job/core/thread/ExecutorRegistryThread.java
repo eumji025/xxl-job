@@ -12,6 +12,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Created by xuxueli on 17/3/2.
+ *
+ * 客户端用来注册心跳的线程。
+ * 每隔一个beat发送一次请求给服务端
  */
 public class ExecutorRegistryThread {
     private static Logger logger = LoggerFactory.getLogger(ExecutorRegistryThread.class);
@@ -42,16 +45,20 @@ public class ExecutorRegistryThread {
                 // registry
                 while (!toStop) {
                     try {
+                        //根据app名称和地址注册请求的参数，地址最好是自动获取，不然多节点怎么玩
                         RegistryParam registryParam = new RegistryParam(RegistryConfig.RegistType.EXECUTOR.name(), appName, address);
+                        //获取服务端列表，admin节点，支持多admin（简单理解为多集群）
                         for (AdminBiz adminBiz: XxlJobExecutor.getAdminBizList()) {
                             try {
+                                //发送请求，参考com.xxl.job.admin.service.impl.AdminBizImpl.registry
                                 ReturnT<String> registryResult = adminBiz.registry(registryParam);
+                                //状态处理
                                 if (registryResult!=null && ReturnT.SUCCESS_CODE == registryResult.getCode()) {
                                     registryResult = ReturnT.SUCCESS;
                                     logger.debug(">>>>>>>>>>> xxl-job registry success, registryParam:{}, registryResult:{}", new Object[]{registryParam, registryResult});
                                     break;
-                                } else {
-                                    logger.info(">>>>>>>>>>> xxl-job registry fail, registryParam:{}, registryResult:{}", new Object[]{registryParam, registryResult});
+                                } else {//注册失败怎么也得给warn日志吧
+                                    logger.warn(">>>>>>>>>>> xxl-job registry fail, registryParam:{}, registryResult:{}", new Object[]{registryParam, registryResult});
                                 }
                             } catch (Exception e) {
                                 logger.info(">>>>>>>>>>> xxl-job registry error, registryParam:{}", registryParam, e);
@@ -66,6 +73,7 @@ public class ExecutorRegistryThread {
                     }
 
                     try {
+                        //睡眠一个beat的时间
                         if (!toStop) {
                             TimeUnit.SECONDS.sleep(RegistryConfig.BEAT_TIMEOUT);
                         }

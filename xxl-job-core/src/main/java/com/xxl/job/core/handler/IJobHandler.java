@@ -7,6 +7,10 @@ import java.lang.reflect.InvocationTargetException;
 /**
  * job handler
  *
+ * 任务处理器的抽象方法
+ *
+ * 因为xxl-job设置了几种任务类型，所以必然在这里要进行策略的处理
+ *
  * @author xuxueli 2015-12-19 19:06:38
  */
 public abstract class IJobHandler {

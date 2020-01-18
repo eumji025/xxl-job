@@ -15,6 +15,14 @@ import java.util.concurrent.TimeUnit;
 /**
  * job file clean thread
  *
+ * 日志文件清理的线程
+ *
+ * 具体清理多久以前的需要根据参数 logRetentionDays 有关系
+ *
+ * 这里注意限制了最小保留三天以上
+ *
+ *
+ *
  * @author xuxueli 2017-12-29 16:23:43
  */
 public class JobLogFileCleanThread {
@@ -58,11 +66,12 @@ public class JobLogFileCleanThread {
                                 if (!childFile.isDirectory()) {
                                     continue;
                                 }
-                                if (childFile.getName().indexOf("-") == -1) {
+                                if (!childFile.getName().contains("-")) {
                                     continue;
                                 }
 
                                 // file create date
+                                //获取创建时间
                                 Date logFileCreateDate = null;
                                 try {
                                     SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd");
@@ -73,8 +82,9 @@ public class JobLogFileCleanThread {
                                 if (logFileCreateDate == null) {
                                     continue;
                                 }
-
+                                //判断是否超过了指定的期限
                                 if ((todayDate.getTime()-logFileCreateDate.getTime()) >= logRetentionDays * (24 * 60 * 60 * 1000) ) {
+                                    //删除文件
                                     FileUtil.deleteRecursively(childFile);
                                 }
 

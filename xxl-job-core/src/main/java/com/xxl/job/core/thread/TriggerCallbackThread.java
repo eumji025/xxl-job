@@ -20,6 +20,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Created by xuxueli on 16/7/22.
+ *
+ * 用来将处理的结果回调服务端进行回传
  */
 public class TriggerCallbackThread {
     private static Logger logger = LoggerFactory.getLogger(TriggerCallbackThread.class);
@@ -65,12 +67,14 @@ public class TriggerCallbackThread {
                         if (callback != null) {
 
                             // callback list param
+                            //将一批数据进行转移
                             List<HandleCallbackParam> callbackParamList = new ArrayList<HandleCallbackParam>();
                             int drainToNum = getInstance().callBackQueue.drainTo(callbackParamList);
                             callbackParamList.add(callback);
 
                             // callback, will retry if error
                             if (callbackParamList!=null && callbackParamList.size()>0) {
+                                //回调
                                 doCallback(callbackParamList);
                             }
                         }
@@ -161,8 +165,10 @@ public class TriggerCallbackThread {
     private void doCallback(List<HandleCallbackParam> callbackParamList){
         boolean callbackRet = false;
         // callback, will retry if error
+        //获取服务端的地址
         for (AdminBiz adminBiz: XxlJobExecutor.getAdminBizList()) {
             try {
+                //进行回传
                 ReturnT<String> callbackResult = adminBiz.callback(callbackParamList);
                 if (callbackResult!=null && ReturnT.SUCCESS_CODE == callbackResult.getCode()) {
                     callbackLog(callbackParamList, "<br>----------- xxl-job job callback finish.");

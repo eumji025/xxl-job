@@ -22,6 +22,13 @@ import java.util.concurrent.*;
 
 /**
  * handler thread
+ *
+ * 任务线程，很明显就是用来处理任务的
+ *
+ * 注意因为服务端发送任务的时候客户端直接接受后放入队列就提示成功了。
+ * 所以处理的逻辑是一步的，具体处理结果，客户端处理完成后 会通过{@link TriggerCallbackThread}进行回传
+ *
+ *
  * @author xuxueli 2016-1-16 19:52:47
  */
 public class JobThread extends Thread{
@@ -51,7 +58,7 @@ public class JobThread extends Thread{
 
     /**
      * new trigger to queue
-     *
+     * 这里是将需要执行的方法记录到列表的方法
      * @param triggerParam
      * @return
      */
@@ -90,17 +97,23 @@ public class JobThread extends Thread{
         return running || triggerQueue.size()>0;
     }
 
-    @Override
+
+	/**
+	 * 方法执行
+	 */
+	@Override
 	public void run() {
 
     	// init
     	try {
+    		//handler初始化的预留方法
 			handler.init();
 		} catch (Throwable e) {
     		logger.error(e.getMessage(), e);
 		}
 
 		// execute
+		//循环的执行
 		while(!toStop){
 			running = false;
 			idleTimes++;
@@ -109,34 +122,42 @@ public class JobThread extends Thread{
             ReturnT<String> executeResult = null;
             try {
 				// to check toStop signal, we need cycle, so wo cannot use queue.take(), instand of poll(timeout)
+				//从阻塞队列获取任务，超时时间3s
 				triggerParam = triggerQueue.poll(3L, TimeUnit.SECONDS);
 				if (triggerParam!=null) {
 					running = true;
 					idleTimes = 0;
+					//移除在待触发的列表
 					triggerLogIdSet.remove(triggerParam.getLogId());
 
 					// log filename, like "logPath/yyyy-MM-dd/9999.log"
+					//构建日志
 					String logFileName = XxlJobFileAppender.makeLogFileName(new Date(triggerParam.getLogDateTime()), triggerParam.getLogId());
 					XxlJobFileAppender.contextHolder.set(logFileName);
+					//分片信息构建
 					ShardingUtil.setShardingVo(new ShardingUtil.ShardingVO(triggerParam.getBroadcastIndex(), triggerParam.getBroadcastTotal()));
 
 					// execute
 					XxlJobLogger.log("<br>----------- xxl-job job execute start -----------<br>----------- Param:" + triggerParam.getExecutorParams());
 
+					//如果存在超时时间
 					if (triggerParam.getExecutorTimeout() > 0) {
 						// limit timeout
 						Thread futureThread = null;
 						try {
 							final TriggerParam triggerParamTmp = triggerParam;
+							//异步执行的任务构建
 							FutureTask<ReturnT<String>> futureTask = new FutureTask<ReturnT<String>>(new Callable<ReturnT<String>>() {
 								@Override
 								public ReturnT<String> call() throws Exception {
 									return handler.execute(triggerParamTmp.getExecutorParams());
 								}
 							});
+							//开启线程执行，我觉得这里应该使用线程池。避免频繁创建
+							//也许他是为了方便任务被打断
 							futureThread = new Thread(futureTask);
 							futureThread.start();
-
+							//获取结果
 							executeResult = futureTask.get(triggerParam.getExecutorTimeout(), TimeUnit.SECONDS);
 						} catch (TimeoutException e) {
 
@@ -149,6 +170,7 @@ public class JobThread extends Thread{
 						}
 					} else {
 						// just execute
+						//执行任务，其实就是调用待执行的方法
 						executeResult = handler.execute(triggerParam.getExecutorParams());
 					}
 
@@ -174,7 +196,7 @@ public class JobThread extends Thread{
 				if (toStop) {
 					XxlJobLogger.log("<br>----------- JobThread toStop, stopReason:" + stopReason);
 				}
-
+				//异常的日志输出 - 这里可以抽象成公共方法
 				StringWriter stringWriter = new StringWriter();
 				e.printStackTrace(new PrintWriter(stringWriter));
 				String errorMsg = stringWriter.toString();
@@ -182,6 +204,7 @@ public class JobThread extends Thread{
 
 				XxlJobLogger.log("<br>----------- JobThread Exception:" + errorMsg + "<br>----------- xxl-job job execute end(error) -----------");
 			} finally {
+            	//执行完成后，会把处理结果放到回调队列
                 if(triggerParam != null) {
                     // callback handler info
                     if (!toStop) {

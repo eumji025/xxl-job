@@ -20,6 +20,14 @@ import java.util.Map;
 /**
  * xxl-job executor (for spring)
  *
+ * 客户端xxl-job spring的注册类
+ * 作用于spring构建bean完成后
+ *
+ *
+ * 注意这里只是将xxl-job的方法修饰成bean，但是并不会将任务的信息注册到服务端。
+ * 任务的注册过程还是需要在服务端的页面进行操作
+ *
+ *
  * @author xuxueli 2018-11-01 09:24:52
  */
 public class XxlJobSpringExecutor extends XxlJobExecutor implements ApplicationContextAware, InitializingBean, DisposableBean {
@@ -30,9 +38,11 @@ public class XxlJobSpringExecutor extends XxlJobExecutor implements ApplicationC
     public void afterPropertiesSet() throws Exception {
 
         // init JobHandler Repository
+        //开启节点注册
         initJobHandlerRepository(applicationContext);
 
         // init JobHandler Repository (for method)
+        //开始注解扫描，job构建
         initJobHandlerMethodRepository(applicationContext);
 
         // refresh GlueFactory
@@ -71,6 +81,10 @@ public class XxlJobSpringExecutor extends XxlJobExecutor implements ApplicationC
         }
     }
 
+    /**
+     * 解析注解，注册任务的方法
+     * @param applicationContext
+     */
     private void initJobHandlerMethodRepository(ApplicationContext applicationContext) {
         if (applicationContext == null) {
             return;
@@ -78,10 +92,13 @@ public class XxlJobSpringExecutor extends XxlJobExecutor implements ApplicationC
 
         // init job handler from method
         String[] beanDefinitionNames = applicationContext.getBeanDefinitionNames();
+        //遍历所有的bean
         for (String beanDefinitionName : beanDefinitionNames) {
             Object bean = applicationContext.getBean(beanDefinitionName);
+            //遍历bean的方法
             Method[] methods = bean.getClass().getDeclaredMethods();
             for (Method method: methods) {
+                //获取注解
                 XxlJob xxlJob = AnnotationUtils.findAnnotation(method, XxlJob.class);
                 if (xxlJob != null) {
 
@@ -127,6 +144,7 @@ public class XxlJobSpringExecutor extends XxlJobExecutor implements ApplicationC
                     }
 
                     // registry jobhandler
+                    //包装成MethodJobHandler
                     registJobHandler(name, new MethodJobHandler(bean, method, initMethod, destroyMethod));
                 }
             }
